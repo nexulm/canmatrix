@@ -247,8 +247,7 @@ def dump(db, filename, **options):
 
         # set style for first line with border
         signal_style = sty_first_frame
-### original default=""
-        additional_frame_info = [frame.attribute(additional, default="No") for additional in additional_frame_columns]
+        additional_frame_info = [frame.attribute(additional, default="no") for additional in additional_frame_columns]
 
         row_array = []
         if len(sig_hash) == 0:
@@ -291,7 +290,7 @@ def dump(db, filename, **options):
                     (frontRow, back_row) = canmatrix.formats.xls_common.get_signal(db, frame, sig, motorola_bit_format)
                     write_excel_line(worksheet, row, front_col, frontRow, signal_style)
                     back_row += additional_frame_info
-##                    print (additional_frame_info)
+
                     for item in additional_signal_columns:
                         temp = getattr(sig, item, "")
                         back_row.append(temp)
@@ -412,7 +411,9 @@ def load(file, **options):
             frame_name = row[column_heads.index('Frame Name')].value
             cycle_time = get_if_possible(row, 'Cycle Time [ms]', '0')
             launch_type = get_if_possible(row, 'Launch Type')
-            dlc = 8
+            dlc = get_if_possible(row, 'frame.size')
+            if dlc is None:
+                dlc = 8
             # launch_param = get_if_possible(row, 'Launch Parameter', '0')
             # launch_param = str(int(launch_param))
 
