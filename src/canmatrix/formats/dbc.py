@@ -239,7 +239,13 @@ def dump(in_db, f, **options):
                 signal.add_attribute("GenSigCycleTime", signal.cycle_time)
             if "GenSigStartValue" in db.signal_defines:
                 signal.add_attribute("GenSigStartValue", signal.phys2raw(None))
-
+####
+            else:
+                if signal.initial_value is None:
+                    signal.add_attribute("GenSigStartValue", 255) 
+                else:
+                    signal.add_attribute("GenSigStartValue", signal.phys2raw(signal.initial_value))
+###            
             name = normalized_names[signal]
             if compatibility:
                 name = re.sub("[^A-Za-z0-9]", whitespace_replacement, name)
@@ -458,9 +464,8 @@ def dump(in_db, f, **options):
                 if signal.muxer_for_signal is not None:
                     f.write(("SG_MUL_VAL_ %d %s %s " % (frame.arbitration_id.to_compound_integer(), signal.name, signal.muxer_for_signal)).encode(dbc_export_encoding, ignore_encoding_errors))
                     f.write((", ".join(["%d-%d" % (a, b) for a, b in signal.mux_val_grp])).encode(dbc_export_encoding, ignore_encoding_errors))
-
                     f.write(";\n".encode(dbc_export_encoding, ignore_encoding_errors))
-
+    
     for env_var_name in db.env_vars:
         env_var = db.env_vars[env_var_name]
         f.write(("EV_ {0} : {1} [{2}|{3}] \"{4}\" {5} {6} {7} {8};\n".format(
@@ -626,7 +631,6 @@ def load(f, **options):  # type: (typing.IO, **typing.Any) -> canmatrix.CanMatri
                         multiplex=multiplex,
                         **extras
                     )
-
                     if is_complex_multiplexed:
                         temp_signal.is_multiplexer = True
                         temp_signal.multiplex = 'Multiplexor'
@@ -822,11 +826,9 @@ def load(f, **options):  # type: (typing.IO, **typing.Any) -> canmatrix.CanMatri
                 if temp:
                     db.add_global_defines(temp.group(1),
                                           temp_raw.group(2).decode(dbc_import_encoding))
-
             elif decoded.startswith("BA_ "):
                 regexp = re.compile(r"^BA_ +\".+?\" +(.+)")
                 tempba = regexp.match(decoded)
-
                 if tempba.group(1).strip().startswith("BO_ "):
                     regexp = re.compile(r"^BA_ +\"(.+?)\" +BO_ +(\d+) +(.+) *; *")
                     temp = regexp.match(decoded)
@@ -913,6 +915,7 @@ def load(f, **options):  # type: (typing.IO, **typing.Any) -> canmatrix.CanMatri
                 max_value = temp.group(4)
                 unit = temp.group(5)
                 initial_value = temp.group(6)
+                initial_value = signal.initial_value
                 ev_id = temp.group(7)
                 access_type = temp.group(8)
                 access_nodes = temp.group(9).split(",")
