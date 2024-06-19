@@ -55,7 +55,6 @@ sty_sender_first_frame = 0
 sty_sender_green = 0
 sty_sender_green_first_frame = 0
 
-
 def write_ecu_matrix(ecu_list, signal, frame, worksheet, row, col, first_frame):
     # type: (typing.Sequence[str], typing.Optional[canmatrix.Signal], canmatrix.Frame, xlsxwriter.workbook.Worksheet, int, int, xlsxwriter.workbook.Format) -> int
     # first-frame - style with borders:
@@ -248,8 +247,8 @@ def dump(db, filename, **options):
 
         # set style for first line with border
         signal_style = sty_first_frame
-
-        additional_frame_info = [frame.attribute(additional, default="") for additional in additional_frame_columns]
+### original default=""
+        additional_frame_info = [frame.attribute(additional, default="No") for additional in additional_frame_columns]
 
         row_array = []
         if len(sig_hash) == 0:
@@ -292,6 +291,7 @@ def dump(db, filename, **options):
                     (frontRow, back_row) = canmatrix.formats.xls_common.get_signal(db, frame, sig, motorola_bit_format)
                     write_excel_line(worksheet, row, front_col, frontRow, signal_style)
                     back_row += additional_frame_info
+##                    print (additional_frame_info)
                     for item in additional_signal_columns:
                         temp = getattr(sig, item, "")
                         back_row.append(temp)
@@ -362,6 +362,12 @@ def load(file, **options):
     db.add_frame_defines("GenMsgDelayTime", 'INT 0 65535')
     db.add_frame_defines("GenMsgCycleTimeActive", 'INT 0 65535')
     db.add_frame_defines("GenMsgNrOfRepetitions", 'INT 0 65535')
+###
+    db.add_frame_defines("DiagRequest", 'ENUM "no", "yes"')
+    db.add_frame_defines("DiagResponse", 'ENUM "no", "yes"')
+    db.add_frame_defines("ApplMessage", 'ENUM "no", "yes"')
+    db.add_frame_defines("NmAsrMessage", 'ENUM "no", "yes"')
+###    
     launch_types = []  # type: typing.List[str]
 
     db.add_signal_defines("GenSigSNA", 'STRING')
@@ -387,7 +393,7 @@ def load(file, **options):
     signal_length = 8
     new_frame = None  # type: typing.Optional[canmatrix.Frame]
     new_signal = None  # type: typing.Optional[canmatrix.Signal]
-
+    
     def get_if_possible(my_row, my_value, default=None):
         if my_value in column_heads and my_row[column_heads.index(my_value)].value is not None:
             return my_row[column_heads.index(my_value)].value
@@ -423,6 +429,21 @@ def load(file, **options):
                 if launch_type not in launch_types:
                     launch_types.append(launch_type)
 
+###
+            diag_request = get_if_possible(row, 'frame.DiagRequest')
+            if diag_request is not None:
+                new_frame.add_attribute("DiagRequest", diag_request)
+            diag_response = get_if_possible(row, 'frame.DiagResponse')
+            if diag_response is not None:
+                new_frame.add_attribute("DiagResponse", diag_response)
+            appl_message = get_if_possible(row, 'frame.ApplMessage')
+            if appl_message is not None:
+                new_frame.add_attribute("ApplMessage", appl_message)
+            nm_asr_message = get_if_possible(row, 'frame.NmAsrMessage')
+            if nm_asr_message is not None:
+                new_frame.add_attribute("NmAsrMessage", nm_asr_message)
+###
+
             new_frame.cycle_time = cycle_time
 
         # new signal detected
@@ -451,9 +472,12 @@ def load(file, **options):
                     is_little_endian = False
             else:
                 is_little_endian = True  # Default Intel
-
-            is_signed = False
-
+###
+            is_signed = get_if_possible(row, 'signal.is_signed')
+            initial_value = get_if_possible(row, 'signal.initial_value')
+            min = get_if_possible(row, 'signal.min')            
+            max = get_if_possible(row, 'signal.max')
+###
             if signal_name != "-":
                 for ecu_name in all_ecu_names:
                     ecu_sender_receiver = get_if_possible(row, ecu_name)
@@ -468,7 +492,10 @@ def load(file, **options):
                                               is_little_endian=is_little_endian,
                                               is_signed=is_signed,
                                               receivers=receiver,
-                                              multiplex=multiplex)
+                                              multiplex=multiplex,
+                                              initial_value=initial_value,
+                                              min=min,
+                                              max=max)
                 if not is_little_endian:
                     # motorola
                     if motorola_bit_format == "msb":
@@ -497,7 +524,6 @@ def load(file, **options):
             value_name = "1"
         test = value_name
         # .encode('utf-8')
-
         factor = get_if_possible(row, 'Function / Increment Unit')
         if factor is not None:
             factor = factor.strip()
@@ -512,10 +538,16 @@ def load(file, **options):
                 new_signal.unit = unit
                 new_signal.factor = 1
 
+###
+        offset = get_if_possible(row, 'signal.offset')
+        if (offset is not None):
+            new_signal.offset = offset
+###
         if ".." in test:
             (mini, maxi) = test.strip().split("..", 2)
             try:
-                new_signal.offset = new_signal.float_factory(mini)
+                if (new_signal.offset is None):
+                    new_signal.offset = new_signal.float_factory(mini)
                 new_signal.min = new_signal.float_factory(mini)
                 new_signal.max = new_signal.float_factory(maxi)
             except ValueError:
@@ -528,7 +560,10 @@ def load(file, **options):
                 value_int = int(float(value))
                 new_signal.add_values(value_int, value_name)
             maxi = pow(2, signal_length) - 1
-            new_signal.max = float(maxi)
+            if max is not None:
+                new_signal.max = float(max)
+            else:
+                new_signal.max = float(maxi)
         else:
             new_signal.offset = 0
             new_signal.min = None
